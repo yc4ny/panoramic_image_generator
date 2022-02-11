@@ -94,7 +94,8 @@ def EstimateH(x1, x2, ransac_n_iter, ransac_thr):
         x1_s = x1[s1]
         x2_s = x2[s1]
 
-        #check if the 4 matches are collinear if true, proceed
+        #check if the 4 matches are collinear(if they are on the same line) 
+        #if true, proceed
         if collinear(x1_s[0], x1_s[1], x1_s[2]) or collinear(x1_s[0], x1_s[1], x1_s[3]) or collinear(x1_s[1], x1_s[2], x1_s[3]) or collinear(x1_s[0], x1_s[2], x1_s[3]):
             continue
         
@@ -138,7 +139,7 @@ def EstimateH(x1, x2, ransac_n_iter, ransac_thr):
             #compare value with error threshold
             if np.linalg.norm(eucl_coord - point2.reshape(2,1)) < ransac_thr:
                 inlier_idx.append(i)
-
+                
         #if needed, update new length of minimum inlier, inlier indices
         #and the homography matrix
         if len(inlier_idx) > len_inlier:
