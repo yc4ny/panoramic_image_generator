@@ -83,71 +83,39 @@ def EstimateH(x1, x2, ransac_n_iter, ransac_thr):
     """
 
     # TODO Your code goes here
+    max_inlier = 0
+    H = np.eye(3)
+    inlier = None
+    for i in range(ransac_n_iter):
+        random_indices = np.random.permutation(x1.shape[0])
+        random_indices = random_indices[:4]
 
-    #estimating homography using the RANSAC Method 
-    #keeps the homography with the smallest number of outliers 
-    for r in range(ransac_n_iter):
+        A = np.empty((8, 9))
+        for i, idx in enumerate(random_indices):
+            A[2*i : 2*(i+1), :] = np.asarray([
+                [x1[idx,0], x1[idx,1], 1, 0, 0, 0, -x1[idx,0]*x2[idx,0], -x1[idx,1]*x2[idx,0], -x2[idx,0]],
+                [0, 0, 0, x1[idx,0], x1[idx,1], 1, -x1[idx,0]*x2[idx,1], -x1[idx,1]*x2[idx,1], -x2[idx,1]]
+            ])
+        U, S, Vh = np.linalg.svd(A)
+        h = Vh[-1, :]
+        _H = np.reshape(h, (3,3))
 
-        #randomly pick 4 good matches and compute homography 
-        s1 = np.random.randint(x1.shape[0], size=4)
-        s2 = np.random.randint(x2.shape[0], size=4)
-        x1_s = x1[s1]
-        x2_s = x2[s1]
+        _H = _H / _H[2,2]
 
-        #check if the 4 matches are collinear(if they are on the same line) 
-        #if true, proceed
-        if collinear(x1_s[0], x1_s[1], x1_s[2]) or collinear(x1_s[0], x1_s[1], x1_s[3]) or collinear(x1_s[1], x1_s[2], x1_s[3]) or collinear(x1_s[0], x1_s[2], x1_s[3]):
-            continue
-        
-        #initialize A,b,x in Ax = b
-        A = []
-        b = []
-        x = []
+        x1_pred = np.hstack([x1, np.ones((x1.shape[0], 1))]) @ _H.T
+        x1_pred = x1_pred[:, 0:2] / x1_pred[:, 2, np.newaxis]
 
-        #add values in matrix A,b 
-        for i in range(len(x1_s)):
-            x_1, y_1 = x1_s[i][0], x1_s[i][1]
-            x_2, y_2 = x2_s[i][0], x2_s[i][1]
-            A.append([x_1, y_1, 1, 0, 0, 0, -x_1*x_2, -y_1*x_2])
-            A.append([0, 0, 0, x_1, y_1, 1, -x_1*y_2, -y_1*y_2])
-            b.append([x_2])
-            b.append([y_2])
+        err = np.sqrt(((x1_pred - x2) ** 2).sum(axis=1))
+        inlier_mask = err < ransac_thr
+        if inlier_mask.sum() > max_inlier:
+            H = _H
+            inlier = np.flatnonzero(inlier_mask)
+            max_inlier = inlier_mask.sum()
+    
+    return H, inlier
 
-        #finding homography
-        #solve for x 
-        #x = (A^(T)A)^(-1)A^(T)b
-        #lecture reference: pg 57 in https://www-users.cse.umn.edu/~hspark/csci5563_S2021/Lec6_ImageTransform.pdf
-        A = np.matrix(A)
-        b = np.matrix(b)
-        x = np.linalg.inv(A.T @ A) @ A.T @ b
 
-        #computed homography, add last value as 1 (property of homogenous coordinates)
-        H = np.concatenate((x,np.array([[1]])), axis=0).reshape(3,3)
 
-        #declare inlier indicies
-        #inliers: good matches that are consistent with the homography
-        #good match: smaller than the error threshold
-        inlier_idx=[]
-        len_inlier = 0
-
-        #zip: 2* 1D matrix -> 1* 2D matrix
-        for i, (point1, point2) in enumerate(zip(x1,x2)):
-            #homogenous coordinate 
-            homo_coord = H * ((np.append(point1,1)).reshape(3,1))
-            #(x,y,z) -> (x/z, y/z)
-            eucl_coord = (homo_coord/homo_coord[2])[:2]
-            #compare value with error threshold
-            if np.linalg.norm(eucl_coord - point2.reshape(2,1)) < ransac_thr:
-                inlier_idx.append(i)
-                
-        #if needed, update new length of minimum inlier, inlier indices
-        #and the homography matrix
-        if len(inlier_idx) > len_inlier:
-            len_inlier = len(inlier_idx)
-            inlier_final = np.array(inlier_idx)
-            H_final = H
-
-    return H_final, inlier_final
 
 #Source: https://stackoverflow.com/questions/9608148/python-script-to-determine-if-x-y-coordinates-are-colinear-getting-some-e
 def collinear(p0, p1, p2):
